@@ -63,7 +63,7 @@ const unsigned int *g_NumPlayersToAuth = NULL;
 int lifestate_offset = -1;
 List<ICommandTargetProcessor *> target_processors;
 
-ConVar sm_debug_connect("sm_debug_connect", "0", 0, "Log Debug information about potential connection issues.");
+ConVar sm_debug_connect("sm_debug_connect", "1", 0, "Log Debug information about potential connection issues.");
 
 SH_DECL_HOOK5(IServerGameClients, ClientConnect, SH_NOATTRIB, 0, bool, edict_t *, const char *, const char *, char *, int);
 SH_DECL_HOOK2_void(IServerGameClients, ClientPutInServer, SH_NOATTRIB, 0, edict_t *, const char *);
@@ -1474,7 +1474,10 @@ void PlayerManager::InvalidatePlayer(CPlayer *pPlayer)
 		}
 	}
 	
-	m_UserIdLookUp[engine->GetPlayerUserId(pPlayer->m_pEdict)] = 0;
+	auto userid = engine->GetPlayerUserId(pPlayer->m_pEdict);
+	if (userid != -1)
+		m_UserIdLookUp[userid] = 0;
+
 	pPlayer->Disconnect();
 }
 
@@ -2235,7 +2238,7 @@ unsigned int CPlayer::GetSteamAccountID(bool validated)
 {
 	if (!IsFakeClient() && (!validated || IsAuthStringValidated()))
 	{
-		const CSteamID &id = GetSteamId();
+		const CSteamID &id = GetSteamId(validated);
 		if (id.IsValid())
 			return id.GetAccountID();
 	}

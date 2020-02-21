@@ -45,35 +45,12 @@
 #include "ConCmdManager.h"
 #include "IDBDriver.h"
 #include "provider.h"
-#if SOURCE_ENGINE >= SE_ALIENSWARM
-# include "convar_sm_swarm.h"
-#elif SOURCE_ENGINE >= SE_LEFT4DEAD
-# include "convar_sm_l4d.h"
-#elif SOURCE_ENGINE >= SE_ORANGEBOX
-# include "convar_sm_ob.h"
-#else
-# include "convar_sm.h"
-#endif
+#include "sm_convar.h"
 #include <amtl/os/am-shared-library.h>
 #include <amtl/os/am-path.h>
 #include <bridge/include/IVEngineServerBridge.h>
 #include <bridge/include/IPlayerInfoBridge.h>
 #include <bridge/include/IFileSystemBridge.h>
-
-#if defined _WIN32
-# define MATCHMAKINGDS_SUFFIX	""
-# define MATCHMAKINGDS_EXT	"dll"
-#elif defined __APPLE__
-# define MATCHMAKINGDS_SUFFIX	""
-# define MATCHMAKINGDS_EXT	"dylib"
-#elif defined __linux__
-#if SOURCE_ENGINE < SE_LEFT4DEAD2
-# define MATCHMAKINGDS_SUFFIX	"_i486"
-#else
-# define MATCHMAKINGDS_SUFFIX	""
-#endif
-# define MATCHMAKINGDS_EXT	"so"
-#endif
 
 sm_logic_t logicore;
 
@@ -650,15 +627,7 @@ void CoreProviderImpl::InitializeBridge()
 	this->serverFactory = (void *)g_SMAPI->GetServerFactory(false);
 	this->listeners = SMGlobalClass::head;
 
-	char path[PLATFORM_MAX_PATH];
-
-	ke::path::Format(path, sizeof(path),
-	                 "%s/bin/" PLATFORM_FOLDER "matchmaking_ds%s.%s",
-                     g_SMAPI->GetBaseDir(),
-                     MATCHMAKINGDS_SUFFIX,
-                     MATCHMAKINGDS_EXT);
-
-	if (ke::RefPtr<ke::SharedLib> mmlib = ke::SharedLib::Open(path, NULL, 0)) {
+	if (ke::RefPtr<ke::SharedLib> mmlib = ke::SharedLib::Open(FORMAT_SOURCE_BIN_NAME("matchmaking_ds"), NULL, 0)) {
 		this->matchmakingDSFactory =
 		  mmlib->get<decltype(sCoreProviderImpl.matchmakingDSFactory)>("CreateInterface");
 	}

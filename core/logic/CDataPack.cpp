@@ -46,7 +46,7 @@ CDataPack::~CDataPack()
 
 static ke::Vector<ke::AutoPtr<CDataPack>> sDataPackCache;
 
-IDataPack *CDataPack::New()
+CDataPack *CDataPack::New()
 {
   if (sDataPackCache.empty())
     return new CDataPack();
@@ -58,32 +58,16 @@ IDataPack *CDataPack::New()
 }
 
 void
-CDataPack::Free(IDataPack *pack)
+CDataPack::Free(CDataPack *pack)
 {
   sDataPackCache.append(static_cast<CDataPack *>(pack));
 }
 
 void CDataPack::Initialize()
 {
-	for (size_t index = 0; index < elements.length(); ++index)
+	do
 	{
-		switch (elements[index].type)
-		{
-			case CDataPackType::Raw:
-			{
-				delete elements[index].pData.vval;
-				elements.remove(index--);
-				break;
-			}
-
-			case CDataPackType::String:
-			{
-				delete elements[index].pData.sval;
-				elements.remove(index--);
-				break;
-			}
-		}
-	}
+	} while (this->RemoveItem());
 
 	elements.clear();
 	position = 0;
@@ -203,11 +187,6 @@ const char *CDataPack::ReadString(size_t *len) const
 	return val.chars();
 }
 
-void *CDataPack::GetMemory() const
-{
-	return nullptr;
-}
-
 void *CDataPack::ReadMemory(size_t *size) const
 {
 	void *ptr = nullptr;
@@ -222,4 +201,44 @@ void *CDataPack::ReadMemory(size_t *size) const
 		*size = val[0]; /* Egor!!!! */
 
 	return ptr;
+}
+
+bool CDataPack::RemoveItem(size_t pos)
+{
+	if (!elements.length())
+	{
+		return false;
+	}
+
+	if (pos == static_cast<size_t>(-1))
+	{
+		pos = position;
+	}
+	if (pos >= elements.length())
+	{
+		return false;
+	}
+
+	if (pos < position) // we're deleting under us, step back
+	{
+		--position;
+	}
+
+	switch (elements[pos].type)
+	{
+		case CDataPackType::Raw:
+		{
+			delete elements[pos].pData.vval;
+			break;
+		}
+
+		case CDataPackType::String:
+		{
+			delete elements[pos].pData.sval;
+			break;
+		}
+	}
+
+	elements.remove(pos);
+	return true;
 }

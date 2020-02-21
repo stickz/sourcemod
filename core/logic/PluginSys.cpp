@@ -31,7 +31,6 @@
 
 #include <stdio.h>
 #include <stdarg.h>
-#include <ctype.h>
 #include "PluginSys.h"
 #include "ShareSys.h"
 #include <ILibrarySys.h>
@@ -47,7 +46,6 @@
 #include "frame_tasks.h"
 #include <amtl/am-string.h>
 #include <amtl/am-linkedlist.h>
-#include <amtl/am-uniqueptr.h>
 #include <bridge/include/IVEngineServerBridge.h>
 #include <bridge/include/CoreProvider.h>
 
@@ -934,38 +932,16 @@ void CPluginManager::LoadPluginsFromDir(const char *basedir, const char *localpa
 	libsys->CloseDirectory(dir);
 }
 
-#if defined PLATFORM_WINDOWS || defined PLATFORM_APPLE
-char *strdup_tolower(const char *input)
-{
-	char *str = strdup(input);
-	
-	for (char *c = str; *c; c++)
-	{
-		*c = tolower((unsigned char)*c);
-	}
-	
-	return str;
-}
-#endif
-
 LoadRes CPluginManager::LoadPlugin(CPlugin **aResult, const char *path, bool debug, PluginType type)
 {
 	if (m_LoadingLocked)
 		return LoadRes_NeverLoad;
 
-/* For windows & mac, we convert the path to lower-case in order to avoid duplicate plugin loading */
-#if defined PLATFORM_WINDOWS || defined PLATFORM_APPLE
-	ke::UniquePtr<char> finalPath = ke::UniquePtr<char>(strdup_tolower(path));
-#else 
-	ke::UniquePtr<char> finalPath = ke::UniquePtr<char>(strdup(path));
-#endif
-
-
 	/**
 	 * Does this plugin already exist?
 	 */
 	CPlugin *pPlugin;
-	if (m_LoadLookup.retrieve(finalPath.get(), &pPlugin))
+	if (m_LoadLookup.retrieve(path, &pPlugin))
 	{
 		/* Check to see if we should try reloading it */
 		if (pPlugin->GetStatus() == Plugin_BadLoad
@@ -978,12 +954,11 @@ LoadRes CPluginManager::LoadPlugin(CPlugin **aResult, const char *path, bool deb
 		{
 			if (aResult)
 				*aResult = pPlugin;
-			
 			return LoadRes_AlreadyLoaded;
 		}
 	}
 
-	CPlugin *plugin = CompileAndPrep(finalPath.get());
+	CPlugin *plugin = CompileAndPrep(path);
 
 	// Assign our outparam so we can return early. It must be set.
 	*aResult = plugin;
@@ -1726,6 +1701,9 @@ void CPluginManager::OnRootConsoleCommand(const char *cmdname, const ICommandArg
 			char buffer[256];
 			unsigned int id = 1;
 			int plnum = GetPluginCount();
+			char plstr[10];
+			ke::SafeSprintf(plstr, sizeof(plstr), "%d", plnum);
+			int plpadding = strlen(plstr);
 
 			if (!plnum)
 			{
@@ -1734,7 +1712,7 @@ void CPluginManager::OnRootConsoleCommand(const char *cmdname, const ICommandArg
 			}
 			else
 			{
-				rootmenu->ConsolePrint("[SM] Listing %d plugin%s:", GetPluginCount(), (plnum > 1) ? "s" : "");
+				rootmenu->ConsolePrint("[SM] Listing %d plugin%s:", plnum, (plnum > 1) ? "s" : "");
 			}
 
 			ke::LinkedList<CPlugin *> fail_list;
@@ -1746,14 +1724,14 @@ void CPluginManager::OnRootConsoleCommand(const char *cmdname, const ICommandArg
 				const sm_plugininfo_t *info = pl->GetPublicInfo();
 				if (pl->GetStatus() != Plugin_Running && !pl->IsSilentlyFailed())
 				{
-					len += ke::SafeSprintf(buffer, sizeof(buffer), "  %02d <%s>", id, GetStatusText(pl->GetDisplayStatus()));
+					len += ke::SafeSprintf(buffer, sizeof(buffer), "  %0*d <%s>", plpadding, id, GetStatusText(pl->GetDisplayStatus()));
 
 					/* Plugin has failed to load. */
 					fail_list.append(pl);
 				}
 				else
 				{
-					len += ke::SafeSprintf(buffer, sizeof(buffer), "  %02d", id);
+					len += ke::SafeSprintf(buffer, sizeof(buffer), "  %0*d", plpadding, id);
 				}
 				if (pl->GetStatus() < Plugin_Created || pl->GetStatus() == Plugin_Evicted)
 				{
@@ -1983,11 +1961,11 @@ void CPluginManager::OnRootConsoleCommand(const char *cmdname, const ICommandArg
 				if (IPluginRuntime *runtime = pl->GetRuntime()) {
 				  unsigned char *pCodeHash = runtime->GetCodeHash();
 				  unsigned char *pDataHash = runtime->GetDataHash();
-				  
+
 				  char combinedHash[33];
 				  for (int i = 0; i < 16; i++)
 				  	ke::SafeSprintf(combinedHash + (i * 2), 3, "%02x", pCodeHash[i] ^ pDataHash[i]);
-				  
+
 				  rootmenu->ConsolePrint("  Hash: %s", combinedHash);
 				}
 			} else {
@@ -2115,7 +2093,7 @@ void CPluginManager::ReloadPluginImpl(int id, const char filename[], PluginType 
 	char error[128];
 	bool wasloaded;
 	IPlugin *newpl = LoadPlugin(filename, true, ptype, error, sizeof(error), &wasloaded);
-	if (!newpl) 
+	if (!newpl)
 	{
 		rootmenu->ConsolePrint("[SM] Plugin %s failed to reload: %s.", filename, error);
 		return;
